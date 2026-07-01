@@ -135,9 +135,9 @@ def _manifold_points(
   d_idx = (dist_bp + dist_ap).argmax() % poly.shape[0]
   return jp.array([a_idx, b_idx, c_idx, d_idx])
 
-def _manifold_points_soft(poly: jax.Array, 
-                          poly_mask: jax.Array, 
-                          poly_norm: jax.Array, 
+def _manifold_points_soft(poly: jax.Array,
+                          poly_mask: jax.Array,
+                          poly_norm: jax.Array,
                           mode: str,
                           softness: float) -> jax.Array:
     """Chooses four points on the polygon with approximately maximal area using softargmax.
@@ -149,24 +149,24 @@ def _manifold_points_soft(poly: jax.Array,
     """
     s, m = softness, mode
     dist_mask = sj.where(poly_mask, 0.0, -1e6) #- 1e6 * jp.arange(poly.shape[0]) # add small bias to prefer earlier vertices in case of ties
-                   
+
     # A: soft argmax over masked distances (picks first valid vertex)
-    a_logits = dist_mask 
+    a_logits = dist_mask
     a_idx = sj.argmax(a_logits, mode=m, softness=s)
     a = sj.dynamic_index_in_dim(poly, a_idx, axis=0, keepdims=False)
-    
+
     # B: soft argmax of distance from A
     b_logits = (((a - poly) ** 2).sum(axis=1)) + dist_mask
     b_idx = sj.argmax(b_logits, mode=m, softness=s)
     b = sj.dynamic_index_in_dim(poly, b_idx, axis=0, keepdims=False)
-    
+
     # C: soft argmax farthest from AB line
     ab = jp.cross(poly_norm, a - b)
     ap = a - poly
     c_logits = sj.abs(ap.dot(ab), mode=m, softness=s) + dist_mask #+ tiebreak
     c_idx = sj.argmax(c_logits, mode=m, softness=s)
     c = sj.dynamic_index_in_dim(poly, c_idx, axis=0, keepdims=False)
-    
+
     # D: softargmax farthest from AC and BC
     ac = jp.cross(poly_norm, a - c)
     bc = jp.cross(poly_norm, b - c)
@@ -178,11 +178,11 @@ def _manifold_points_soft(poly: jax.Array,
     return jp.stack([a_idx, b_idx, c_idx, d_idx])
 
 @collider(ncon=4)
-def plane_convex(plane: GeomInfo, 
-                 convex: ConvexInfo, 
-                 soft: bool, 
+def plane_convex(plane: GeomInfo,
+                 convex: ConvexInfo,
+                 soft: bool,
                  softjax_mode: str,
-                 softness: float = 1e-10) -> Collision:
+                 softness: float = 1e-6) -> Collision:
   """Calculates contacts between a plane and a convex object."""
   vert = convex.vert
 
@@ -195,7 +195,7 @@ def plane_convex(plane: GeomInfo,
     m = softjax_mode
     smax = sj.max(support, softness=softness, mode=m)  # Pick vertex with largest penetration.
     thresh = sj.relu(smax - 1e-3, softness=softness, mode=m)  # If (smax - 1e-3) > 0 use it to select contact points.                           │
-    poly_mask = sj.greater_equal(support, thresh, softness=softness, mode=m)   
+    poly_mask = sj.greater_equal(support, thresh, softness=softness, mode=m)
     idx = _manifold_points_soft(vert, poly_mask, n, mode=m, softness=softness)
     pos = idx @ vert           # (4, N) @ (N, 3) → (4, 3)                                           │
     dist = -(idx @ support)    # (4, N) @ (N,) → (4,)

@@ -451,81 +451,6 @@ class ObjType(PyTreeNode):
   CAMERA = mujoco.mjtObj.mjOBJ_CAMERA
 
 
-class Option(PyTreeNode):
-  """Physics options.
-
-  Attributes:
-    timestep:          timestep
-    apirate:           update rate for remote API (Hz) (not used)
-    impratio:          ratio of friction-to-normal contact impedance
-    tolerance:         main solver tolerance
-    ls_tolerance:      CG/Newton linesearch tolerance
-    noslip_tolerance:  noslip solver tolerance (not used)
-    ccd_tolerance:     CCD solver tolerance (not used)
-    gravity:           gravitational acceleration                 (3,)
-    wind:              wind (for lift, drag and viscosity)
-    magnetic:          global magnetic flux (not used)
-    density:           density of medium
-    viscosity:         viscosity of medium
-    o_margin:          contact solver override: margin (not used)
-    o_solref:          contact solver override: solref (not used)
-    o_solimp:          contact solver override: solimp (not used)
-    o_friction[5]:     contact solver override: friction (not used)
-    has_fluid_params:  automatically set by mjx if wind/density/viscosity are
-      nonzero. Not used by mj
-    integrator:        integration mode
-    cone:              type of friction cone
-    jacobian:          matrix layout for mass matrices (dense or sparse)
-                       (note that this is different from MuJoCo, where jacobian
-                       specifies whether efc_J and its accompanying matrices
-                       are dense or sparse.
-    solver:            solver algorithm
-    iterations:        number of main solver iterations
-    ls_iterations:     maximum number of CG/Newton linesearch iterations
-    noslip_iterations: maximum number of noslip solver iterations (not used)
-    ccd_iterations:    maximum number of CCD solver iterations (not used)
-    disableflags:      bit flags for disabling standard features
-    enableflags:       bit flags for enabling optional features (not used)
-    disableactuator:   bit flags for disabling actuators by group id (not used)
-    sdf_initpoints:    number of starting points for gradient descent (not used)
-    sdf_iterations:    max number of iterations for gradient descent (not used)
-  """  # fmt: skip
-  timestep: jax.Array
-  apirate: jax.Array = _restricted_to('mujoco')
-  impratio: jax.Array
-  tolerance: jax.Array
-  ls_tolerance: jax.Array
-  noslip_tolerance: jax.Array = _restricted_to('mujoco')
-  ccd_tolerance: jax.Array = _restricted_to('mujoco')
-  gravity: jax.Array
-  wind: jax.Array
-  magnetic: jax.Array
-  density: jax.Array
-  viscosity: jax.Array
-  o_margin: jax.Array
-  o_solref: jax.Array
-  o_solimp: jax.Array
-  o_friction: jax.Array
-  has_fluid_params: bool = _restricted_to('mjx')
-  integrator: IntegratorType
-  cone: ConeType
-  jacobian: JacobianType
-  solver: SolverType
-  iterations: int
-  ls_iterations: int
-  noslip_iterations: int = _restricted_to('mujoco')
-  ccd_iterations: int = _restricted_to('mujoco')
-  disableflags: DisableBit
-  enableflags: int
-  disableactuator: int
-  sdf_initpoints: int = _restricted_to('mujoco')
-  sdf_iterations: int = _restricted_to('mujoco')
-  col_soft_enable: bool = _restricted_to('mjx')
-  softjax_mode: str = _restricted_to('mjx')
-  cfd_enable: bool = _restricted_to('mjx')
-  cfd_solimp: jax.Array = _restricted_to('mjx')
-  scan_loop: bool = _restricted_to('mjx')
-
 class Statistic(PyTreeNode):
   """Model statistics (in qpos0).
 
@@ -585,6 +510,11 @@ class Option(PyTreeNode):
   integrator: IntegratorType
   solver: SolverType
   timestep: jax.Array
+  col_soft_enable: bool
+  softjax_mode: str
+  cfd_enable: bool
+  cfd_solimp: jax.Array
+  scan_loop: bool
   _impl: Union[OptionJAX, mjxw_types.OptionWarp]
 
 

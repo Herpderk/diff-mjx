@@ -2,8 +2,6 @@
 
 import sys
 
-sys.path.insert(0, "/home/local_apaulus/Projects/mujoco_lpgd/mujoco/mjx")
-
 import jax
 import jax.numpy as jp
 import mujoco
