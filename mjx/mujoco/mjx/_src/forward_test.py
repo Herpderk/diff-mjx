@@ -14,16 +14,12 @@
 # ==============================================================================
 """Tests for forward functions."""
 
-import types as pytypes
-from unittest import mock
-
 from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 from jax import numpy as jp
 import mujoco
 from mujoco import mjx
-from mujoco.mjx._src import forward
 from mujoco.mjx._src import test_util
 import numpy as np
 
@@ -45,47 +41,50 @@ def _assert_attr_eq(a, b, attr, tol=_TOLERANCE):
 
 class ForwardTest(absltest.TestCase):
 
-  def test_forward_piecewise_and_straight_through_dispatch(self):
-    d = jp.array(0.0)
+  def test_piecewise_contact_and_straight_through(self):
+    m = mujoco.MjModel.from_xml_string("""
+        <mujoco>
+          <option gravity="0 0 0" timestep="0.001"/>
+          <worldbody>
+            <geom type="plane" size="1 1 .01" margin="0.01"/>
+            <body pos="0 0 0.111">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """)
+    d = mujoco.MjData(m)
+    d.qvel[2] = -1.0
+    mx = mjx.put_model(m)
+    dx = mjx.put_data(m, d)
+    pw_solimp = jp.array([0.9, 0.95, 0.002, 0.5, 2.0])
 
-    with mock.patch.object(
-        forward, '_forward', side_effect=lambda m, d, soft: jp.array(soft)
-    ) as fwd:
-      m = pytypes.SimpleNamespace(
-          opt=pytypes.SimpleNamespace(pw_solimp=None, st_enable=True)
-      )
-      out = forward.forward(m, d)
-      self.assertFalse(bool(out))
-      self.assertEqual(
-          [call.kwargs['soft'] for call in fwd.call_args_list], [False]
-      )
+    def contact_force(pw_solimp, st_enable, qpos):
+      opt = mx.opt.replace(pw_solimp=pw_solimp, st_enable=st_enable)
+      return mjx.forward(
+          mx.replace(opt=opt), dx.replace(qpos=qpos)
+      ).qfrc_constraint[2]
 
-    pw_solimp = jp.array([0.9, 0.95, 0.001, 0.5, 2.0])
-    with mock.patch.object(
-        forward, '_forward', side_effect=lambda m, d, soft: jp.array(soft)
-    ) as fwd:
-      m = pytypes.SimpleNamespace(
-          opt=pytypes.SimpleNamespace(pw_solimp=pw_solimp, st_enable=False)
-      )
-      out = forward.forward(m, d)
-      self.assertTrue(bool(out))
-      self.assertEqual(
-          [call.kwargs['soft'] for call in fwd.call_args_list], [True]
-      )
+    def contact_force_and_grad(pw_solimp, st_enable):
+      fn = lambda qpos: contact_force(pw_solimp, st_enable, qpos)
+      return fn(dx.qpos), jax.grad(fn)(dx.qpos)[2]
 
-    with mock.patch.object(
-        forward,
-        '_forward',
-        side_effect=lambda m, d, soft: jp.array(1.0 if soft else 2.0),
-    ) as fwd:
-      m = pytypes.SimpleNamespace(
-          opt=pytypes.SimpleNamespace(pw_solimp=pw_solimp, st_enable=True)
-      )
-      out = forward.forward(m, d)
-      self.assertEqual(float(out), 2.0)
-      self.assertEqual(
-          [call.kwargs['soft'] for call in fwd.call_args_list], [True, False]
-      )
+    force, grad = contact_force_and_grad(None, False)
+    self.assertEqual(force, 0.0)
+    self.assertEqual(grad, 0.0)
+
+    force, grad = contact_force_and_grad(None, True)
+    self.assertEqual(force, 0.0)
+    self.assertEqual(grad, 0.0)
+
+    force, grad = contact_force_and_grad(pw_solimp, False)
+    self.assertGreater(force, 0.0)
+    self.assertLess(grad, 0.0)
+
+    force, grad = contact_force_and_grad(pw_solimp, True)
+    self.assertEqual(force, 0.0)
+    self.assertLess(grad, 0.0)
 
   def test_forward(self):
     m = test_util.load_test_file('constraints.xml')
