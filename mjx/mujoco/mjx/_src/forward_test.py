@@ -41,6 +41,51 @@ def _assert_attr_eq(a, b, attr, tol=_TOLERANCE):
 
 class ForwardTest(absltest.TestCase):
 
+  def test_piecewise_contact_and_straight_through(self):
+    m = mujoco.MjModel.from_xml_string("""
+        <mujoco>
+          <option gravity="0 0 0" timestep="0.001"/>
+          <worldbody>
+            <geom type="plane" size="1 1 .01" margin="0.01"/>
+            <body pos="0 0 0.111">
+              <freejoint/>
+              <geom type="sphere" size="0.1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """)
+    d = mujoco.MjData(m)
+    d.qvel[2] = -1.0
+    mx = mjx.put_model(m)
+    dx = mjx.put_data(m, d)
+    pw_solimp = jp.array([0.9, 0.95, 0.002, 0.5, 2.0])
+
+    def contact_force(pw_solimp, st_enable, qpos):
+      opt = mx.opt.replace(pw_solimp=pw_solimp, st_enable=st_enable)
+      return mjx.forward(
+          mx.replace(opt=opt), dx.replace(qpos=qpos)
+      ).qfrc_constraint[2]
+
+    def contact_force_and_grad(pw_solimp, st_enable):
+      fn = lambda qpos: contact_force(pw_solimp, st_enable, qpos)
+      return fn(dx.qpos), jax.grad(fn)(dx.qpos)[2]
+
+    force, grad = contact_force_and_grad(None, False)
+    self.assertEqual(force, 0.0)
+    self.assertEqual(grad, 0.0)
+
+    force, grad = contact_force_and_grad(None, True)
+    self.assertEqual(force, 0.0)
+    self.assertEqual(grad, 0.0)
+
+    force, grad = contact_force_and_grad(pw_solimp, False)
+    self.assertGreater(force, 0.0)
+    self.assertLess(grad, 0.0)
+
+    force, grad = contact_force_and_grad(pw_solimp, True)
+    self.assertEqual(force, 0.0)
+    self.assertLess(grad, 0.0)
+
   def test_forward(self):
     m = test_util.load_test_file('constraints.xml')
     d = mujoco.MjData(m)
