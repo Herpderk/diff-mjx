@@ -197,7 +197,7 @@ class SoftCollisionTest(parameterized.TestCase):
     mx = mjx.put_model(m)
     dx = mjx.put_data(m, d)
 
-    for mode in ('hard', 'c2'):
+    for mode in ('hard', 'smooth', 'c2'):
       mx_soft = mx.replace(opt=mx.opt.replace(softjax_mode=mode))
       dx_soft = jax.jit(collision_driver.collision)(mx_soft, dx)
       dist = np.asarray(dx_soft._impl.contact.dist)
